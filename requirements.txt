@@ -1,0 +1,5 @@
+# Requirements for the Plex Stash Agent project
+fastapi
+uvicorn
+requests
+pydantic
