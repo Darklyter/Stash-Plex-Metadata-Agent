@@ -11,7 +11,17 @@ This agent allows Plex "Movies" libraries to match files and retrieve metadata (
 **Another Note:** This does not take any sort of Stash authentication into consideration.  If you use authentication either disable it or submit a PR. 😁
 
 
-## Quick Start
+### Plex Configuration (Should be done after API is running)
+
+To enable this agent in Plex (v1.43.0.10389+), you need to go into the Plex settings, and under your server you should find `Metadata Agents`.  
+
+First create a `Metadata Provider`, which will only take the url:port for this application.  For me it is `http://192.168.0.81:7979`.  If the API is running it should automatically retrieve the specs and name the Agent to "Stash Plex Metadata Provider".
+
+Once the Provider is created, then create a `Metadata Agent`.  You can name it whatever you would like, but select "Stash Plex Metadata Provider" from the dropdown list of options.  You can add the Personal Media as a fallback if you have local images with the files I believe, but I haven't tried that
+
+Once the Agent is created, then you can apply that to a library.  Just create a new Library of type "Movies", call it whatever you would like, add whatever folders, and under `Advanced` select "Plex Movie" as the scanner and whatever you called your Agent as the agent.
+
+
 
 ### Installation
 ```bash
