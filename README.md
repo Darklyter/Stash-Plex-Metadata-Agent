@@ -41,6 +41,8 @@ Edit `stashplexagent.config`:
 host = 0.0.0.0
 port = 7979
 num_workers = 2
+poster_mode = false
+agent_base_url = http://192.168.1.81:7979
 
 [stash]
 ip = 192.168.1.71
@@ -53,6 +55,8 @@ cache_ttl = 300
 url =
 token =
 ```
+
+All settings can be configured via the config file. Environment variables are also supported and take precedence over config file values when set (see [Environment Variables](#environment-variables)).
 
 #### Stash API Key (Authentication)
 
@@ -82,17 +86,18 @@ python main.py
 ### Docker (Recommended)
 ```bash
 # Using docker-compose (easiest)
-docker-compose up -d
+docker-compose up -d --build
 
 # Or build and run manually
 docker build -t stashplexagent .
 docker run -d \
   --name stashplexagent \
   -p 7979:7979 \
-  -e STASH_HOST=http://192.168.1.71:9999 \
-  -e STASH_API_KEY=your-api-key-here \
+  -v ./stashplexagent.config:/app/stashplexagent.config:ro \
   stashplexagent
 ```
+
+The `docker-compose.yml` mounts `stashplexagent.config` from the project directory into the container. All settings are read from this config file — no environment variables are needed unless you want to override specific values.
 
 ### Ubuntu systemd Service
 1. Copy project to a directory and create virtualenv inside of it
@@ -122,37 +127,57 @@ sudo systemctl enable --now stashplexagent.service
 sudo ufw allow 7979/tcp  # If using firewall
 ```
 
-## Environment Variables
+## Configuration Reference
+
+All settings below can be set in `stashplexagent.config`. Environment variables are also supported as overrides (env vars take precedence when set).
+
+### Config File Settings
+
+| Section | Key | Env Override | Description | Default |
+|---------|-----|-------------|-------------|---------|
+| `[plexagentserver]` | `host` | — | Listen address | `0.0.0.0` |
+| `[plexagentserver]` | `port` | — | Listen port | `7979` |
+| `[plexagentserver]` | `num_workers` | — | Number of uvicorn workers | `2` |
+| `[plexagentserver]` | `poster_mode` | `POSTER_MODE` | Reformat screenshots into 2:3 posters | `false` |
+| `[plexagentserver]` | `agent_base_url` | `AGENT_BASE_URL` | Public URL of this agent (see below) | `http://<host>:<port>` |
+| `[stash]` | `ip` | `STASH_HOST`* | Stash server IP | `192.168.1.71` |
+| `[stash]` | `port` | `STASH_HOST`* | Stash server port | `9999` |
+| `[stash]` | `api_key` | `STASH_API_KEY` | API key for authenticated Stash instances | *(empty)* |
+| `[stash]` | `debug` | `DEBUG` | Enable debug logging | `false` |
+| `[stash]` | `cache_ttl` | `CACHE_TTL` | Metadata cache lifetime in seconds (`0` to disable) | `300` |
+| `[plex]` | `url` | `PLEX_URL` | Plex server URL for poster upload | *(empty)* |
+| `[plex]` | `token` | `PLEX_TOKEN` | Plex auth token for poster upload | *(empty)* |
+
+\* `STASH_HOST` env var overrides both `ip` and `port` as a full URL (e.g., `http://192.168.1.71:9999`).
+
+Additional env-only variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `STASH_HOST` | Override Stash server URL from config file | `http://<ip>:<port>` from config |
-| `STASH_API_KEY` | Stash API key for authenticated instances | *(empty)* |
-| `DEBUG` | Enable debug logging (`true`/`false`) | `false` |
 | `DEV` | Enable development mode with auto-reload (`true`/`false`) | `false` |
-| `CACHE_TTL` | Metadata cache lifetime in seconds (`0` to disable) | `300` |
-| `AGENT_BASE_URL` | Public URL of this agent (used in image proxy URLs sent to Plex) | `http://127.0.0.1:7979` |
-| `POSTER_MODE` | Reformat screenshots into 2:3 poster images with black bars (`true`/`false`) | `false` |
-| `PLEX_URL` | Plex Media Server URL for direct poster upload (e.g., `http://192.168.1.76:32400`) | *(empty)* |
-| `PLEX_TOKEN` | Plex authentication token (`X-Plex-Token`) for poster upload | *(empty)* |
 
-#### Image Proxy / `AGENT_BASE_URL`
+**Note:** When using Docker, empty environment variables (e.g., `PLEX_URL=`) will override config file values with blank strings. The recommended approach is to set everything in the config file and not define environment variables at all unless you need to override a specific setting.
 
-Plex proxies thumbnail and artwork URLs through `images.plex.tv`, which cannot reach private LAN addresses like `192.168.x.x`. To work around this, the agent proxies all Stash images through itself. The `AGENT_BASE_URL` variable tells the agent what URL Plex should use to reach it — this should be the LAN IP or hostname that your Plex server can access (e.g., `http://192.168.1.81:7979`).
+#### Image Proxy / `agent_base_url`
+
+Plex proxies thumbnail and artwork URLs through `images.plex.tv`, which cannot reach private LAN addresses like `192.168.x.x`. To work around this, the agent proxies all Stash images through itself. The `agent_base_url` setting tells the agent what URL Plex should use to reach it — this should be the LAN IP or hostname that your Plex server can access (e.g., `http://192.168.1.81:7979`).
 
 #### Poster Mode
 
-When `POSTER_MODE=true` (or `poster_mode = true` in config), scene screenshots are reformatted into 2:3 aspect ratio poster images. The original 16:9 screenshot is centered on a black canvas with letterbox bars at the top and bottom, giving you the full video image in a poster format suitable for Plex "Movies" libraries. Requires `AGENT_BASE_URL` to be set.
+When `poster_mode = true`, scene screenshots are reformatted into 2:3 aspect ratio poster images. The original 16:9 screenshot is centered on a black canvas with letterbox bars at the top and bottom, giving you the full video image in a poster format suitable for Plex "Movies" libraries. Requires `agent_base_url` to be set.
 
-#### Plex Poster Upload / `PLEX_URL` + `PLEX_TOKEN`
+#### Plex Poster Upload
 
 Plex routes all poster/thumbnail display through `images.plex.tv`, a cloud CDN that **cannot reach private LAN addresses**. This means poster URLs pointing to `192.168.x.x` will fail to display in Plex clients.
 
-To work around this, the agent can upload posters **directly to your Plex server** via its local API. When both `PLEX_URL` and `PLEX_TOKEN` are set (and `POSTER_MODE` is enabled), the agent will:
+To work around this, the agent can upload posters **directly to your Plex server** via its local API. Set `url` and `token` in the `[plex]` section (and enable `poster_mode`) to activate this feature. The agent will:
+
 1. Serve the metadata response to Plex as usual
 2. In the background, search your Plex server for the matched item
 3. Upload the 2:3 poster image directly to Plex's local storage
 4. Plex then serves the locally-stored poster without needing `images.plex.tv`
+
+For metadata refreshes (item already exists in Plex), the poster uploads immediately. For new items, the agent waits for Plex to finish ingesting the metadata before uploading.
 
 To find your Plex token, see [Finding an authentication token](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/).
 
